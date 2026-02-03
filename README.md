@@ -16,4 +16,7 @@ git submodule init
 ```
 git submodule update
 ```
-6. TODO: Finish usage instructions
+6. If you are missing dependencies, they can be installed using `rosdep`
+```
+rosdep install -i --from-path src --rosdistro jazzy -y
+```

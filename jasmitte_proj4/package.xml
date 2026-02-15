@@ -3,7 +3,7 @@
 <package format="3">
   <name>jasmitte_proj4</name>
   <version>0.0.0</version>
-  <description>TODO: Package description</description>
+  <description>A package for performing localization using KF, EKF, and UKF on a differential drive robot.</description>
   <maintainer email="jasmitte@mtu.edu">anders</maintainer>
   <license>MIT</license>
 

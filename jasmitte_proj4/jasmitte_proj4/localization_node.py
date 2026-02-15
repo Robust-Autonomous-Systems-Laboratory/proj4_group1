@@ -30,15 +30,18 @@ class LocalizationNode(Node):
         # ___Filter States (x, y, theta)___
         self.x_kf = np.zeros(3)
         self.P_kf = np.eye(3) * 0.1 
-        self.x_prev_kf = np.copy(self.x_kf)
+        self.x_last_kf_wheels = np.copy(self.x_kf)
+        self.x_last_kf_imu = np.copy(self.x_kf)
         
         self.x_ekf = np.zeros(3)
         self.P_ekf = np.eye(3) * 0.1 
-        self.x_prev_ekf = np.copy(self.x_ekf)
+        self.x_last_ekf_wheels = np.copy(self.x_ekf)
+        self.x_last_ekf_imu = np.copy(self.x_ekf)
         
         self.x_ukf = np.zeros(3)
         self.P_ukf = np.eye(3) * 0.1 
-        self.x_prev_ukf = np.copy(self.x_ukf)
+        self.x_last_ukf_wheels = np.copy(self.x_ukf)
+        self.x_last_ukf_imu = np.copy(self.x_ukf)
 
         # ___Noise Matrices___
         self.Q = np.diag([0.0001, 0.0001, 0.0001]) # Process noise for [x, y, theta]
@@ -57,6 +60,7 @@ class LocalizationNode(Node):
         self.last_phi_l, self.last_phi_r = None, None
         self.v_cmd, self.omega_cmd = 0.0, 0.0
         self.last_time = None
+        self.last_imu_time = None
         
         path_qos = QoSProfile(durability=DurabilityPolicy.TRANSIENT_LOCAL, depth=1)
 
@@ -150,16 +154,18 @@ class LocalizationNode(Node):
             h_func = self.h_wheels
             H_gen = self.get_jacobian_h_wheels
             R = self.R_wheels
-            angle_indices = [1] 
+            angle_indices = [1]
+            xp_kf, xp_ekf, xp_ukf = self.x_last_kf_wheels, self.x_last_ekf_wheels, self.x_last_ukf_wheels
         else: # IMU case
             h_func = self.h_imu
             H_gen = lambda x, xp: np.array([[0.0, 0.0, 1.0]])
             R = self.R_imu
             angle_indices = [0]
+            xp_kf, xp_ekf, xp_ukf = self.x_last_kf_imu, self.x_last_ekf_imu, self.x_last_ukf_imu
 
         # ___KF UPDATE___
         H_kf = H_gen(np.zeros(3), np.zeros(3))
-        kf_y = z - h_func(self.x_kf, self.x_prev_kf)
+        kf_y = z - h_func(self.x_kf, xp_kf)
         for idx in angle_indices: kf_y[idx] = self.normalize_angle(kf_y[idx])
         S_kf = H_kf @ self.P_kf @ H_kf.T + R
         K_kf = self.P_kf @ H_kf.T @ np.linalg.inv(S_kf)
@@ -168,8 +174,8 @@ class LocalizationNode(Node):
         self.P_kf = (np.eye(3) - K_kf @ H_kf) @ self.P_kf
 
         # ___EKF UPDATE___
-        H_ekf = H_gen(self.x_ekf, self.x_prev_ekf)
-        ekf_y = z - h_func(self.x_ekf, self.x_prev_ekf)
+        H_ekf = H_gen(self.x_ekf, xp_ekf)
+        ekf_y = z - h_func(self.x_ekf, xp_ekf)
         for idx in angle_indices: ekf_y[idx] = self.normalize_angle(ekf_y[idx])
         S_ekf = H_ekf @ self.P_ekf @ H_ekf.T + R
         K_ekf = self.P_ekf @ H_ekf.T @ np.linalg.inv(S_ekf)
@@ -183,7 +189,7 @@ class LocalizationNode(Node):
         U = np.linalg.cholesky((self.n + self.lambda_ukf) * self.P_ukf)
         for k in range(self.n): sigmas[k+1], sigmas[self.n+k+1] = self.x_ukf + U[:, k], self.x_ukf - U[:, k]
             
-        sigmas_h = np.array([h_func(s, self.x_prev_ukf) for s in sigmas])
+        sigmas_h = np.array([h_func(s, xp_ukf) for s in sigmas])
         zp = np.dot(self.Wm, sigmas_h)
         
         dim_z = R.shape[0]
@@ -208,10 +214,11 @@ class LocalizationNode(Node):
             kf_y_pub = np.array([0.0, kf_y[0]])
             ekf_y_pub = np.array([0.0, ekf_y[0]])
             ukf_y_pub = np.array([0.0, ukf_y[0]])
+            self.x_last_kf_imu, self.x_last_ekf_imu, self.x_last_ukf_imu = np.copy(self.x_kf), np.copy(self.x_ekf), np.copy(self.x_ukf)
         else:
             kf_y_pub, ekf_y_pub, ukf_y_pub = kf_y, ekf_y, ukf_y
+            self.x_last_kf_wheels, self.x_last_ekf_wheels, self.x_last_ukf_wheels = np.copy(self.x_kf), np.copy(self.x_ekf), np.copy(self.x_ukf)
 
-        self.x_prev_kf, self.x_prev_ekf, self.x_prev_ukf = np.copy(self.x_kf), np.copy(self.x_ekf), np.copy(self.x_ukf)
         self.publish_analysis(kf_y_pub, ekf_y_pub, ukf_y_pub)
 
     def publish_analysis(self, kf_y, ekf_y, ukf_y):
@@ -243,10 +250,17 @@ class LocalizationNode(Node):
 
     def imu_callback(self, msg):
         curr_time = msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9
-        if self.last_time is None: self.last_time = curr_time; return
+        if self.last_time is None: self.last_time = curr_time; self.last_imu_time = curr_time; return
+        
         dt, self.last_time = curr_time - self.last_time, curr_time
+        
+        # Measurement interval for IMU integration
+        if self.last_imu_time is None: self.last_imu_time = curr_time
+        dt_imu = curr_time - self.last_imu_time
+        self.last_imu_time = curr_time
+        
         self.predict_step(dt)
-        self.perform_update(np.array([msg.angular_velocity.z * dt]), 'imu')
+        self.perform_update(np.array([msg.angular_velocity.z * dt_imu]), 'imu')
         self.publish_all()
 
     def cmd_vel_callback(self, msg):

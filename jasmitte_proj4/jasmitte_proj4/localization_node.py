@@ -79,7 +79,7 @@ class LocalizationNode(Node):
         self.imu_sub = self.create_subscription(Imu, '/imu', self.imu_callback, 10)
         self.cmd_vel_sub = self.create_subscription(TwistStamped, '/cmd_vel', self.cmd_vel_callback, 10)
 
-        self.get_logger().info('Localization Node Started.')
+        self.get_logger().info('Localization Node Started Strongly.')
 
     def normalize_angle(self, angle):
         return (angle + np.pi) % (2 * np.pi) - np.pi

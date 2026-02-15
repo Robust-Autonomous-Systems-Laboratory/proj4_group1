@@ -66,9 +66,10 @@ This repository contains a ROS 2 node that implements three distinct methods for
 ### Results and Analysis
 
 #### Example Output
-*Eventual description of our visual results*
+![Rviz Depiction of Three Paths](<results.png>)
+*Three different robot paths, all determined from the same rosbag. Red is the kf, Green is the EKF, Blue is the UKF*
 
-#### 6b. Reducing Epistemic Uncertainty: Statistics of the Residual
+#### 6b. Reducing Uncertainty: Statistics of the Residual
 * **Linear Residuals:** Monitored via `data[0]`. These represent the innovation between wheel odometry and the predicted state.
 * **Angular Residuals:** Monitored via `data[1]`. These represent the fusion of the gyro and wheel encoders. 
 * **Comparison of Tuning:** Observations on how $R_{wheels}$ vs $R_{imu}$ affects residual magnitude.

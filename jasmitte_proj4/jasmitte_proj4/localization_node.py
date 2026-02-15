@@ -41,7 +41,7 @@ class LocalizationNode(Node):
         self.x_prev_ukf = np.copy(self.x_ukf)
 
         # ___Noise Matrices___
-        self.Q = np.diag([0.0001, 0.0001, 0.0001]) 
+        self.Q = np.diag([0.00001, 0.00001, 0.00001]) 
         self.R_mat = np.diag([0.001, 0.001])
         
         # ___UKF Parameters___

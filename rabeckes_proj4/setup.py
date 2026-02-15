@@ -24,6 +24,7 @@ setup(
     },
     entry_points={
         'console_scripts': [
+            'localization_node = rabeckes_proj4.node:main',
         ],
     },
 )

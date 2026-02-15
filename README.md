@@ -17,7 +17,7 @@ This repository contains a ROS 2 node that implements three distinct methods for
     ```
 2. **Clone the repository:**
     ```bash
-    git clone https://github.com/Robust-Autonomous-Systems-Laboratory/proj4_group1.
+    git clone [https://github.com/Robust-Autonomous-Systems-Laboratory/proj4_group1](https://github.com/Robust-Autonomous-Systems-Laboratory/proj4_group1).
     git submodule update --init --recursive
     ```
 3. **Install dependencies:**
@@ -48,49 +48,52 @@ This repository contains a ROS 2 node that implements three distinct methods for
         ros2 run rviz2 rviz2 -d install/jasmitte_proj4/share/jasmitte_proj4/rviz/proj4.rviz --ros-args -p use_sim_time:=true
         ```
 9. **Analysis (rqt_plot):**
-    * To view residuals and covariance stability for any filter (e.g., EKF):
+    * Each filter (KF, EKF, UKF) publishes a `Float64MultiArray` to its respective `/analysis` topic. To monitor a specific filter, add its topic to `rqt_plot`.
+    * **Example (EKF):**
         ```bash
-        ros2 run rqt_plot rqt_plot /localization_node/ekf/analysis/data[0]:data[1]:data[2]
+        ros2 run rqt_plot rqt_plot /localization_node/ekf/analysis/data[0]:data[1]
         ```
+    * **Data Index Map:**
+        * `data[0]`: Linear Residual (Distance Error in meters)
+        * `data[1]`: Angular Residual (Heading Error in radians)
+        * `data[2]`: Variance in X position ($\sigma^2_x$)
+        * `data[3]`: Variance in Y position ($\sigma^2_y$)
+        * `data[4]`: Variance in Heading ($\sigma^2_\theta$)
 
 ---
 
 ### Results and Analysis
 
 #### Example Output
-
 *Eventual description of our visual results*
 
 #### 6b. Reducing Epistemic Uncertainty: Statistics of the Residual
-*   **Linear Residuals:** 
-*   **Angular Residuals:** 
-*   **Comparison of Tuning:** 
+* **Linear Residuals:** Monitored via `data[0]`. These represent the innovation between wheel odometry and the predicted state.
+* **Angular Residuals:** Monitored via `data[1]`. These represent the fusion of the gyro and wheel encoders. 
+* **Comparison of Tuning:** Observations on how $R_{wheels}$ vs $R_{imu}$ affects residual magnitude.
 
 #### 6c. Covariance Stability
-*   **Behavior without measurements:** 
-*   **KF Stability:** 
-*   **EKF Stability:** 
-*   **UKF Stability:** 
+* **Behavior without measurements:** Expected growth of $P$ diagonals (`data[2:4]`) during prediction-only phases.
+* **KF Stability:** Analysis of the linearized covariance behavior.
+* **EKF Stability:** Analysis of the state-dependent Jacobian effects on $P$.
+* **UKF Stability:** Observation of the sigma-point propagation of uncertainty.
 
 #### 6d. One Ground Truth Point
-*   **Calculated Translation Error:** 
-*   **Calculated Rotational Error:** 
-*   **Best Performing Filter:** 
+* **Calculated Translation Error:** Difference between final estimated $(x,y)$ and ground truth.
+* **Calculated Rotational Error:** Difference between final estimated $\theta$ and ground truth.
+* **Best Performing Filter:** Comparison of final pose accuracy.
 
 #### 7. Decision
-*   **Selected Algorithm:** 
-*   **Reasoning:** 
+* **Selected Algorithm:** * **Reasoning:** 
 
 #### 8. Improvement
-*   **Future Enhancements:** 
-
----
+* **Future Enhancements:** ---
 
 ### References
-*   Differential Kinematics: [Wikipedia: Differential wheeled robot](https://en.wikipedia.org/wiki/Differential_wheeled_robot)
-*   Kalman Filtering: [Wikipedia: Kalman filter](https://en.wikipedia.org/wiki/Kalman_filter)
-*   Non-linear Filtering (EKF/UKF): [Wikipedia: Non-linear filters](https://en.wikipedia.org/wiki/Kalman_filter#Nonlinear_filters)
-*   Robot Parameters : [Turtlebot3: Documentation](https://emanual.robotis.com/docs/en/platform/turtlebot3/features/)
+* Differential Kinematics: [Wikipedia: Differential wheeled robot](https://en.wikipedia.org/wiki/Differential_wheeled_robot)
+* Kalman Filtering: [Wikipedia: Kalman filter](https://en.wikipedia.org/wiki/Kalman_filter)
+* Non-linear Filtering (EKF/UKF): [Wikipedia: Non-linear filters](https://en.wikipedia.org/wiki/Kalman_filter#Nonlinear_filters)
+* Robot Parameters : [Turtlebot3: Documentation](https://emanual.robotis.com/docs/en/platform/turtlebot3/features/)
 
 ### AI Disclosure
-Google Gemini was used to assist with the implementation of the Kalman Filter algorithms (KF, EKF, UKF), formatting the Python node structure, and establishing the ROS 2 launch and analysis topic configurations. Specifically, Gemini assisted in manual implementation of the UKF Sigma Point math and the Jacobian derivations for the EKF.
+Google Gemini was used to assist with the implementation of the Kalman Filter algorithms (KF, EKF, UKF), formatting the Python node structure, and establishing the ROS 2 launch and analysis topic configurations. Specifically, Gemini assisted in the implementation of asynchronous sensor fusion using partial updates (1x1 IMU updates vs 2x2 wheel updates) to prevent state-estimate issues.

@@ -5,7 +5,7 @@
 This repository contains a ROS 2 node that implements three distinct methods for robot state estimation: **Linearized Kalman Filter (KF)**, **Extended Kalman Filter (EKF)**, and **Unscented Kalman Filter (UKF)**. The node fuses data from commanded velocities (`/cmd_vel`), wheel encoders (`/joint_states`), and IMU measurements (`/imu`) to estimate the robot's pose and path.
 
 ### Prerequisites
-* Ubuntu 24.04 or Linux Mint 22.3
+* Ubuntu 24.04 or Linux Mint 22.3 or WSL (untested)
 * ROS 2 Jazzy
 * `rosbag2_2026_02_03-15_36_14` recorded data folder
 
@@ -90,6 +90,7 @@ This repository contains a ROS 2 node that implements three distinct methods for
 *   Differential Kinematics: [Wikipedia: Differential wheeled robot](https://en.wikipedia.org/wiki/Differential_wheeled_robot)
 *   Kalman Filtering: [Wikipedia: Kalman filter](https://en.wikipedia.org/wiki/Kalman_filter)
 *   Non-linear Filtering (EKF/UKF): [Wikipedia: Non-linear filters](https://en.wikipedia.org/wiki/Kalman_filter#Nonlinear_filters)
+*   Robot Parameters : [Turtlebot3: Documentation](https://emanual.robotis.com/docs/en/platform/turtlebot3/features/)
 
 ### AI Disclosure
 Google Gemini was used to assist with the implementation of the Kalman Filter algorithms (KF, EKF, UKF), formatting the Python node structure, and establishing the ROS 2 launch and analysis topic configurations. Specifically, Gemini assisted in manual implementation of the UKF Sigma Point math and the Jacobian derivations for the EKF.

@@ -54,12 +54,13 @@ This repository contains a ROS 2 node that implements three distinct methods for
         ros2 run rqt_plot rqt_plot /localization_node/ekf/analysis/data[0]:data[1]
         ```
     * **Data Index Map:**
-        * `data[0]`: Linear Residual (Distance Error in meters)
-        * `data[1]`: Angular Residual (Heading Error in radians)
+        * `data[0]`: Linear Residual (meters)
+        * `data[1]`: Angular Residual (radians)
         * `data[2]`: Variance in X position ($\sigma^2_x$)
         * `data[3]`: Variance in Y position ($\sigma^2_y$)
         * `data[4]`: Variance in Heading ($\sigma^2_\theta$)
 
+    * *Note: System asynchronous rates are handled via partial updates. When IMU measurements arrive, Distance Error (data[0]) is padded with 0.0 to maintain consistent array dimensions for plotting. This shows up in the plots.*
 ---
 
 ### Results and Analysis

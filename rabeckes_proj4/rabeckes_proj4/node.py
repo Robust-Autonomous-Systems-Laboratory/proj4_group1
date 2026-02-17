@@ -6,6 +6,9 @@ from sensor_msgs.msg import JointState, Imu
 from geometry_msgs.msg import TwistStamped, Pose, PoseStamped
 from nav_msgs.msg import Path, Odometry
 from std_msgs.msg import Header
+from tf2_ros.buffer import Buffer
+from tf2_ros.transform_listener import TransformListener
+from tf2_ros import TransformException
 
 from rabeckes_proj4.kf import KalmanFilter
 
@@ -34,9 +37,9 @@ class KFNode(Node):
                 'ukf' : None
                 }
         self.z = {
-            'x' : 0,
-            'y' : 0,
-            'theta' : 0}
+            'x' : 0.,
+            'y' : 0.,
+            'theta' : 0.}
         # Create Subscribers
         self.joint_state_sub = self.create_subscription(
             JointState,
@@ -68,12 +71,30 @@ class KFNode(Node):
             }
         # Timer callback
         self.timer = self.create_timer(self.dt, self.step)
+        # Transform Listener
+        self.tf_buffer = Buffer()
+        self.tf_listener = TransformListener(self.tf_buffer, self)
         
-        #self.get_logger().info(f'IMU: theta = {self.z['theta']}')
     def jointStateSub(self, msg):
-        self.z['x'] = msg.position[0]
-        self.z['y'] = msg.position[1]
-        #self.get_logger().info(f'Joint State: x = {self.z['x']}, y = {self.z['y']}')
+        try:
+            tf = self.tf_buffer.lookup_transform('odom', 'base_link', rclpy.time.Time())
+        except TransformException as e:
+            self.get_logger().warn(f'Could not transform odom to base_link: {e}')
+            return
+        '''
+        qx = tf.transform.rotation.x
+        qy = tf.transform.rotation.y
+        qz = tf.transform.rotation.z
+        qw = tf.transform.rotation.w
+        theta = self.quaternionToYaw(qx, qy, qz, qw)
+        mx = msg.position[0]
+        my = msg.position[1]
+        self.z['x'] = np.cos(theta)*mx - np.sin(theta)*my + tf.transform.translation.x
+        self.z['y'] = np.sin(theta)*mx + np.cos(theta)*my + tf.transform.translation.y
+        '''
+        self.z['x'] = tf.transform.translation.x
+        self.z['y'] = tf.transform.translation.y
+        #self.get_logger().info(f'{tf}')
         return
 
     def imuSub(self, msg):
@@ -81,13 +102,16 @@ class KFNode(Node):
         y = msg.orientation.y
         z = msg.orientation.z
         w = msg.orientation.w
-        yaw = np.arctan2(2.0 * (w * z + x * y), 1.0 - 2.0 * (y * y + z * z))
+        yaw = self.quaternionToYaw(x, y, z, w)
         self.z['theta'] = yaw
         #self.get_logger().info(f'IMU: theta = {self.z['theta']}')
         return
 
     def cmdVelSub(self, msg):
         return
+
+    def quaternionToYaw(self, x, y, z, w):
+        return np.arctan2(2.0 * (w * z + x * y), 1.0 - 2.0 * (y * y + z * z))
 
     def step(self):
         p0 = np.eye(6) * 0.1

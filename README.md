@@ -146,7 +146,7 @@ The UKF uses the same process ($f$) and measurement ($h$) models but propagates 
 *   **Demonstration Video Including Covariance:** <video controls src="screen_rec_cropped.mp4" title="Title"></video>
 
 ![Rviz Depiction of Three Paths](<results.png>)
-*Current visualization of the three paths (Red: KF, Green: EKF, Blue: UKF)*
+*Current visualization of the three paths *Plot each residual (including +/- 3 sigma bounds) at each time step for each algorithm.*(Red: KF, Green: EKF, Blue: UKF)*
 
 #### 2b. Understanding of the Residual
 

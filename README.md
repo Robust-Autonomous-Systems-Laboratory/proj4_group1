@@ -89,6 +89,7 @@ The system uses a 5-state Velocity-State model to allow direct fusion of acceler
 *   **Process Model ($f(x, u)$):**
     Predicts the next state based on current state and control inputs ($v_{cmd}, \omega_{cmd}$).
     $$
+    ```bash
     x_{k+1} = \begin{bmatrix}
     x_k + v_k \cos(\theta_k) \Delta t \\
     y_k + v_k \sin(\theta_k) \Delta t \\
@@ -150,11 +151,11 @@ The UKF uses the same process ($f$) and measurement ($h$) models but propagates 
 #### 2b. Understanding of the Residual
 *Plot each residual (including +/- 3 sigma bounds) at each time step for each algorithm.*
 
-*   **KF Residuals:** [add our plots]
+*   **KF Residuals:** ![Kalman filter residual plotted alongside +/- 3 sigma.](kf3sigma.png)
     *   *Analysis:* ...
-*   **EKF Residuals:** [add our plots]
+*   **EKF Residuals:** ![Extended kalman filter residual plotted alongside +/- 3 sigma.](ekf3sigma.png)
     *   *Analysis:* ...
-*   **UKF Residuals:** [add our plots]
+*   **UKF Residuals:** ![Unscented filter residual plotted alongside +/- 3 sigma.](ukf3sigma.png)
     *   *Analysis:* ...
 
 #### 2c. Algorithm Tuning

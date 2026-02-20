@@ -18,7 +18,6 @@ This repository contains a ROS 2 node that implements three distinct methods for
 2. **Clone the repository:**
     ```bash
     git clone https://github.com/Robust-Autonomous-Systems-Laboratory/proj4_group1
-    git submodule update --init --recursive
     ```
 3. **Install dependencies:**
     ```bash
@@ -27,7 +26,7 @@ This repository contains a ROS 2 node that implements three distinct methods for
     ```
 4. **Build the workspace:**
     ```bash
-    colcon build --symlink-install
+    colcon build --symlink-install --packages-select jasmitte_proj4
     ```
 5. **Source the environment:**
     ```bash

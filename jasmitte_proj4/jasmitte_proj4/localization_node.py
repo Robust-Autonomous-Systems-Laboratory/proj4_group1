@@ -85,6 +85,9 @@ class LocalizationNode(Node):
         self.imu_sub = self.create_subscription(Imu, '/imu', self.imu_callback, 10)
         self.cmd_vel_sub = self.create_subscription(TwistStamped, '/cmd_vel', self.cmd_vel_callback, 10)
 
+        # Parameters
+        self.declare_parameter('prediction_only', False)
+
         self.get_logger().info('Localization Node Started.')
 
     def normalize_angle(self, angle):
@@ -159,6 +162,13 @@ class LocalizationNode(Node):
         self.P_ukf = self.make_pd(self.P_ukf + self.Q)
 
     def perform_update(self, z, R, sensor_type):
+        if self.get_parameter('prediction_only').get_parameter_value().bool_value:
+            # Skip updates but still publish analysis for covariance plotting
+            dummy_y = np.zeros(2)
+            dummy_S = np.eye(2)
+            self.publish_analysis(dummy_y, dummy_y, dummy_y, dummy_S, dummy_S, dummy_S, sensor_type)
+            return
+
         if sensor_type == 'imu':
             h_func = lambda x: self.h_imu(x, self.v_cmd)
             H = np.zeros((2, 5)); H[0, 4] = 1.0; H[1, 3] = -1.0 / self.tau

@@ -157,17 +157,17 @@ All three filters demonstrated proper residual behavior. The residuals appeared 
 #### 2c. Algorithm Tuning
 
 *   **Selected Algorithm:** Classic Kalman Filter
-*   **Poorly Tuned Plot:** ![alt text](kf3sigmabad.png)
-*   **Well-Tuned Plot:** ![alt text](kf3sigma-1.png)
+*   **Poorly Tuned Plot:** ![Kalman Filter residuals with poor tuning.](kf3sigmabad.png)
+*   **Well-Tuned Plot:** ![Kalman Filter residuals with optimized tuning.](kf3sigma-1.png)
 *   **Tuning Explanation:** By tuning the R matrices so that the linear and angular acceleration measured by the IMU is less trustworthy the filter learns to trust the process and wheel encoder measurements more. The residual appears to have less variance, and be more zero-centered on the well tuned filter. 
 
 #### 2d. Covariance Stability
 
-*   **KF Covariance (No Measurements):** ![alt text](kfnomeas.png)
-*   **EKF Covariance (No Measurements):** ![alt text](ekfnomeas.png)
-*   **UKF Covariance (No Measurements):** ![alt text](ukfnomeas.png)
+*   **KF Covariance (No Measurements):** ![Linear Kalman Filter covariance growth over time in the absence of measurement updates.](kfnomeas.png)
+*   **EKF Covariance (No Measurements):** ![Extended Kalman Filter covariance growth over time in the absence of measurement updates.](ekfnomeas.png)
+*   **UKF Covariance (No Measurements):** ![Unscented Kalman Filter covariance growth over time in the absence of measurement updates.](ukfnomeas.png)
 *   **Stability Analysis:** All three filters covariance grows continuously as the process continues. This indicates that none of the filters are completely stable without measurements to correct them. The EKF and UKF are more stable than the regular KF which is shown with the lower covariances and also their smoother paths. 
-*   **Improvement Strategy:** Better tuning of the process noise covariance would lead to better stablity. This can be done by incorporating the accleration variance as "noise" that skews the velocity and position states. This would make the covariance state a more accurate representation of the actual model.
+*   **Improvement Strategy:** Better tuning of the process noise covariance would lead to better stability. This can be done by incorporating the acceleration variance as "noise" that skews the velocity and position states. This would make the covariance state a more accurate representation of the actual model.
 
 #### 2e. Ground Truth Evaluation
 
@@ -184,14 +184,14 @@ All three filters demonstrated proper residual behavior. The residuals appeared 
 ### 3. Engineering Decision
 
 *   **Winning Algorithm:** The Unscented Kalman Filter.
-*   **Reasoning:** The UKF performs as well as the EKF in terms of reconstructing the path, but is noticibly simpler, both in terms of the mathmatics and the code implementation. If the system were substantially more complicated, or more non-linearities were modelled such that computing the jacobian was at all difficult then the UKF would be the clear choice. 
+*   **Reasoning:** The UKF performs as well as the EKF in terms of reconstructing the path, but is noticeably simpler, both in terms of the mathematics and the code implementation. If the system were substantially more complicated, or more non-linearities were modelled such that computing the jacobian was at all difficult then the UKF would be the clear choice. 
 
 ---
 
 ### 4. Future Improvements
-The most important improvement to this localization system is to include a map. If the robot has an understanding of what its environmet is it can relate itself to that environment based on sesnor information it has. Combining the map with more sensor data can also improve the localization. Here, the robot is directly measuring its environment and relating features it detects to the map its has. This gets into the realm of simultaneous localization and mapping.
+The most important improvement to this localization system is to include a map. If the robot has an understanding of what its environment is it can relate itself to that environment based on sensor information it has. Combining the map with more sensor data can also improve the localization. Here, the robot is directly measuring its environment and relating features it detects to the map it has. This gets into the realm of simultaneous localization and mapping.
 
-A more direct improvement to this system would be better characterization of covariance for both the process noise (Q) and the measurement noise (R). These parameters where tuned based off of intuition but a proper calculation would improve the filter's path. The process noise covariance (Q) could be better characterized by incoporating the varaiance of the acceleration which would act like noise on our position and velocity measurements. To improve the the measurement noise covariance characterization (R), tests would need to be done with those sensors to find their characteristics.
+A more direct improvement to this system would be better characterization of covariance for both the process noise (Q) and the measurement noise (R). These parameters were tuned based off of intuition but a proper calculation would improve the filter's path. The process noise covariance (Q) could be better characterized by incorporating the variance of the acceleration which would act like noise on our position and velocity measurements. To improve the measurement noise covariance characterization (R), tests would need to be done with those sensors to find their characteristics.
 
 ---
 

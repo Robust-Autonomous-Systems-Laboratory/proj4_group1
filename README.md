@@ -40,7 +40,7 @@ This repository contains a ROS 2 node that implements three distinct methods for
 7. **Play the rosbag:**
     * In a separate terminal (remember to source `install/setup.bash`), play the data with clock emulation:
         ```bash
-        ros2 bag play src/rosbag2_2026_02_03-15_36_14 --clock
+        ros2 bag play src/proj4_group1/rosbag2_2026_02_03-15_36_14 --clock
         ```
 8. **Analysis (rqt_plot):**
     * Each filter (KF, EKF, UKF) publishes a `Float64MultiArray` with **17 elements** to its respective `/analysis` topic.

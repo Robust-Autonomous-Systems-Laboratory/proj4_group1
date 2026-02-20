@@ -149,7 +149,6 @@ The UKF uses the same process ($f$) and measurement ($h$) models but propagates 
 *Current visualization of the three paths (Red: KF, Green: EKF, Blue: UKF)*
 
 #### 2b. Understanding of the Residual
-*Plot each residual (including +/- 3 sigma bounds) at each time step for each algorithm.*
 
 *   **KF Residuals:** ![Kalman filter residual plotted alongside +/- 3 sigma.](kf3sigma.png)
 *   **EKF Residuals:** ![Extended kalman filter residual plotted alongside +/- 3 sigma.](ekf3sigma.png)
@@ -158,12 +157,11 @@ The UKF uses the same process ($f$) and measurement ($h$) models but propagates 
 All three filters demonstrated proper residual behavior. The residuals appeared white with zero mean and little autocorrelation. When the mean begins to drift away from zero it is driven back to zero indicating the Kalman gain is correctly applying to the residual.
 
 #### 2c. Algorithm Tuning
-*select one algorithm and compare badly tuned vs. well-tuned performance.*
 
-*   **Selected Algorithm:** ...
-*   **Poorly Tuned Plot:** [add our plots]
-*   **Well-Tuned Plot:** [add our plots]
-*   **Tuning Explanation:** ...
+*   **Selected Algorithm:** Classic Kalman Filter
+*   **Poorly Tuned Plot:** ![alt text](kf3sigmabad.png)
+*   **Well-Tuned Plot:** ![alt text](kf3sigma-1.png)
+*   **Tuning Explanation:** By tuning the R matrices so that the linear and angular acceleration measured by the IMU is less trustworthy the filter learns to trust the process and wheel encoder measurements more. The residual appears to have less variance, and be more zero-centered on the well tuned filter. 
 
 #### 2d. Covariance Stability
 *Plot diagonal elements of the state covariance matrix without using measurement.*

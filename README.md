@@ -177,7 +177,7 @@ The UKF uses the same process ($f$) and measurement ($h$) models but propagates 
 ### 2. Results and Analysis
 
 #### 2a. ROS 2 and RViz Visualization
-**Demonstration Video Including Covariance:** <video controls src="screen_rec_cropped.mp4" title="Title"></video>
+**Demonstration Video Including Covariance:** ![gif of robots working](screen_rec_cropped.gif)
 
 ![Rviz Depiction of Three Paths](<results.png>)
 *Current visualization of the three paths (Red: KF, Green: EKF, Blue: UKF)*

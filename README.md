@@ -33,69 +33,181 @@ This repository contains a ROS 2 node that implements three distinct methods for
     ```bash
     source install/setup.bash
     ```
-6. **Run the localization node:**
-    ```bash
-    ros2 run jasmitte_proj4 localization_node --ros-args -p use_sim_time:=true
-    ```
+6. **Launch the Localization System:**
+    * This starts the `localization_node` and `RViz2` with the correct configuration:
+        ```bash
+        ros2 launch jasmitte_proj4 localization.launch.py
+        ```
 7. **Play the rosbag:**
-    * In a separate terminal, play the data with clock emulation to sync the node timestamps:
+    * In a separate terminal (remember to source `install/setup.bash`), play the data with clock emulation:
         ```bash
         ros2 bag play src/rosbag2_2026_02_03-15_36_14 --clock
         ```
-8. **Visualization (RViz2):**
-    * Open RViz2 using the provided configuration file to see the Path trajectories and Covariance ellipses:
-        ```bash
-        ros2 run rviz2 rviz2 -d install/jasmitte_proj4/share/jasmitte_proj4/rviz/proj4.rviz --ros-args -p use_sim_time:=true
-        ```
-9. **Analysis (rqt_plot):**
-    * Each filter (KF, EKF, UKF) publishes a `Float64MultiArray` to its respective `/analysis` topic. To monitor a specific filter, add its topic to `rqt_plot`.
-    * **Example (EKF):**
-        ```bash
-        ros2 run rqt_plot rqt_plot /localization_node/ekf/analysis/data[0]:data[1]
-        ```
+8. **Analysis (rqt_plot):**
+    * Each filter (KF, EKF, UKF) publishes a `Float64MultiArray` with **17 elements** to its respective `/analysis` topic.
+    
     * **Data Index Map:**
-        * `data[0]`: Linear Residual (meters)
-        * `data[1]`: Angular Residual (radians)
-        * `data[2]`: Variance in X position ($\sigma^2_x$)
-        * `data[3]`: Variance in Y position ($\sigma^2_y$)
-        * `data[4]`: Variance in Heading ($\sigma^2_\theta$)
+        | Index | Field | Description |
+        | :--- | :--- | :--- |
+        | `data[0]` | IMU $\omega$ Residual | Angular velocity error (rad/s) |
+        | `data[1]` | IMU $a_x$ Residual | Linear acceleration error (m/s²) |
+        | `data[2]` | Wheels $v$ Residual | Linear velocity error (m/s) |
+        | `data[3]` | Wheels $\omega$ Residual | Angular velocity error (rad/s) |
+        | `data[4]` | IMU $\omega$ $+3\sigma$ Bound | Upper boundary for data[0] |
+        | `data[5]` | IMU $a_x$ $+3\sigma$ Bound | Upper boundary for data[1] |
+        | `data[6]` | Wheels $v$ $+3\sigma$ Bound | Upper boundary for data[2] |
+        | `data[7]` | Wheels $\omega$ $+3\sigma$ Bound | Upper boundary for data[3] |
+        | `data[8]` | IMU $\omega$ $-3\sigma$ Bound | Lower boundary for data[0] |
+        | `data[9]` | IMU $a_x$ $-3\sigma$ Bound | Lower boundary for data[1] |
+        | `data[10]`| Wheels $v$ $-3\sigma$ Bound | Lower boundary for data[2] |
+        | `data[11]`| Wheels $\omega$ $-3\sigma$ Bound | Lower boundary for data[3] |
+        | `data[12]`| $\sigma^2_x$ | Variance in X position |
+        | `data[13]`| $\sigma^2_y$ | Variance in Y position |
+        | `data[14]`| $\sigma^2_\theta$ | Variance in Heading |
+        | `data[15]`| $\sigma^2_v$ | Variance in Linear Velocity |
+        | `data[16]`| $\sigma^2_\omega$ | Variance in Angular Velocity |
 
-    * *Note: System asynchronous rates are handled via partial updates. When IMU measurements arrive, Distance Error (data[0]) is padded with 0.0 to maintain consistent array dimensions for plotting. This shows up in the plots.*
+    * **Plotting Residuals with Bounds:**
+        To plot a residual (e.g., IMU $\omega$) with its full $3\sigma$ envelope, add the following to `rqt_plot`:
+        ```text
+        /localization_node/ekf/analysis/data[0]
+        /localization_node/ekf/analysis/data[4]
+        /localization_node/ekf/analysis/data[8]
+        ```
 ---
 
-### Results and Analysis
+### 1. State Space and Algorithm Modeling
+The system uses a 5-state Velocity-State model to allow direct fusion of accelerometers and gyroscopes.
 
-#### Example Output
+*   **State Vector ($x$):**
+    $$ x = \begin{bmatrix} x & y & \theta & v & \omega \end{bmatrix}^T $$
+    *   $x, y$: Robot position in global frame (meters)
+    *   $\theta$: Robot heading (radians)
+    *   $v$: Linear velocity (m/s)
+    *   $\omega$: Angular velocity (rad/s)
+
+*   **Process Model ($f(x, u)$):**
+    Predicts the next state based on current state and control inputs ($v_{cmd}, \omega_{cmd}$).
+    $$
+    x_{k+1} = \begin{bmatrix}
+    x_k + v_k \cos(\theta_k) \Delta t \\
+    y_k + v_k \sin(\theta_k) \Delta t \\
+    \theta_k + \omega_k \Delta t \\
+    v_k + (v_{cmd} - v_k) \frac{\Delta t}{\tau} \\
+    \omega_k + (\omega_{cmd} - \omega_k) \frac{\Delta t}{\tau}
+    \end{bmatrix}
+    $$
+
+#### Kalman Filter (KF/EKF) Matrices
+
+*   **Process Jacobian ($F$):**
+    Linearized around the current state estimate for both KF and EKF.
+    $$
+    F = \frac{\partial f}{\partial x} = \begin{bmatrix}
+    1 & 0 & -v_k \sin(\theta_k) \Delta t & \cos(\theta_k) \Delta t & 0 \\
+    0 & 1 & v_k \cos(\theta_k) \Delta t & \sin(\theta_k) \Delta t & 0 \\
+    0 & 0 & 1 & 0 & \Delta t \\
+    0 & 0 & 0 & 1 - \Delta t/\tau & 0 \\
+    0 & 0 & 0 & 0 & 1 - \Delta t/\tau
+    \end{bmatrix}
+    $$
+
+*   **Measurement Model:**
+    The system fuses both Wheel Encoders and IMU in the **Rate Domain**.
+
+    **1. IMU Measurement:**
+    *   **Measurement Vector ($z_{imu}$):** $[\omega, a_x]^T$
+    *   **Observation Model ($h_{imu}(x)$):**
+        $$ h_{imu}(x) = \begin{bmatrix} \omega \\ (v_{cmd} - v) / \tau \end{bmatrix} $$
+    *   **Jacobian ($H_{imu}$):**
+        $$ H_{imu} = \begin{bmatrix} 0 & 0 & 0 & 0 & 1 \\ 0 & 0 & 0 & -1/\tau & 0 \end{bmatrix} $$
+
+    **2. Wheel Encoder Measurement:**
+    *   **Measurement Vector ($z_{wheels}$):** $[v, \omega]^T$
+    *   **Observation Model ($h_{wheels}(x)$):**
+        $$ h_{wheels}(x) = \begin{bmatrix} v \\ \omega \end{bmatrix} $$
+    *   **Jacobian ($H_{wheels}$):**
+        $$ H_{wheels} = \begin{bmatrix} 0 & 0 & 0 & 1 & 0 \\ 0 & 0 & 0 & 0 & 1 \end{bmatrix} $$
+
+#### Unscented Kalman Filter (UKF)
+The UKF uses the same process ($f$) and measurement ($h$) models but propagates sigma points using the transform.
+
+*   **Sigma Point Parameters:**
+    *   $\alpha = 0.1$
+    *   $\beta = 2.0$
+    *   $\kappa = 0.0$
+
+---
+
+### 2. Results and Analysis
+
+#### 2a. ROS 2 and RViz Visualization
+*   **Demonstration Video Including Covariance:** <video controls src="screen_rec_cropped.mp4" title="Title"></video>
+
 ![Rviz Depiction of Three Paths](<results.png>)
-*Three different robot paths, all determined from the same rosbag. Red is the kf, Green is the EKF, Blue is the UKF*
+*Current visualization of the three paths (Red: KF, Green: EKF, Blue: UKF)*
 
-#### 6b. Reducing Uncertainty: Statistics of the Residual
-* **Linear Residuals:** Monitored via `data[0]`. These represent the innovation between wheel odometry and the predicted state.
-* **Angular Residuals:** Monitored via `data[1]`. These represent the fusion of the gyro and wheel encoders. 
-* **Comparison of Tuning:** Observations on how $R_{wheels}$ vs $R_{imu}$ affects residual magnitude.
+#### 2b. Understanding of the Residual
+*Plot each residual (including +/- 3 sigma bounds) at each time step for each algorithm.*
 
-#### 6c. Covariance Stability
-* **Behavior without measurements:** Expected growth of $P$ diagonals (`data[2:4]`) during prediction-only phases.
-* **KF Stability:** Analysis of the linearized covariance behavior.
-* **EKF Stability:** Analysis of the state-dependent Jacobian effects on $P$.
-* **UKF Stability:** Observation of the sigma-point propagation of uncertainty.
+*   **KF Residuals:** [add our plots]
+    *   *Analysis:* ...
+*   **EKF Residuals:** [add our plots]
+    *   *Analysis:* ...
+*   **UKF Residuals:** [add our plots]
+    *   *Analysis:* ...
 
-#### 6d. One Ground Truth Point
-* **Calculated Translation Error:** Difference between final estimated $(x,y)$ and ground truth.
-* **Calculated Rotational Error:** Difference between final estimated $\theta$ and ground truth.
-* **Best Performing Filter:** Comparison of final pose accuracy.
+#### 2c. Algorithm Tuning
+*select one algorithm and compare badly tuned vs. well-tuned performance.*
 
-#### 7. Decision
-* **Selected Algorithm:** * **Reasoning:** 
+*   **Selected Algorithm:** ...
+*   **Poorly Tuned Plot:** [add our plots]
+*   **Well-Tuned Plot:** [add our plots]
+*   **Tuning Explanation:** ...
 
-#### 8. Improvement
-* **Future Enhancements:** ---
+#### 2d. Covariance Stability
+*Plot diagonal elements of the state covariance matrix without using measurement.*
+
+*   **KF Covariance (No Measurements):** [add our plots]
+*   **EKF Covariance (No Measurements):** [add our plots]
+*   **UKF Covariance (No Measurements):** [add our plots]
+*   **Stability Analysis:** ...
+*   **Improvement Strategy:** ...
+
+#### 2e. Ground Truth Evaluation
+*compute the aboslute error from the ending and starting positions. this is just the initial position minus the final position*
+
+| Algorithm | Trans. Error (m) | Rot. Error (rad) |
+|-----------|------------------|------------------|
+| KF        |                  |                  |
+| EKF       |                  |                  |
+| UKF       |                  |                  |
+
+*   **Best Performing Filter:** ...
+
+---
+
+### 3. Engineering Decision
+*select our best algorithm and describe why.*
+
+*   **Winning Algorithm:** ...
+*   **Reasoning:** ...
+
+---
+
+### 4. Future Improvements
+*Describe improvements to our system*
+
+*   **Enhancements:** ...
+
+---
 
 ### References
 * Differential Kinematics: [Wikipedia: Differential wheeled robot](https://en.wikipedia.org/wiki/Differential_wheeled_robot)
 * Kalman Filtering: [Wikipedia: Kalman filter](https://en.wikipedia.org/wiki/Kalman_filter)
 * Non-linear Filtering (EKF/UKF): [Wikipedia: Non-linear filters](https://en.wikipedia.org/wiki/Kalman_filter#Nonlinear_filters)
+* Cholesky Decomposition: [Wikipedia: Cholesky decomposition](https://en.wikipedia.org/wiki/Cholesky_decomposition)
 * Robot Parameters : [Turtlebot3: Documentation](https://emanual.robotis.com/docs/en/platform/turtlebot3/features/)
 
 ### AI Disclosure
-Google Gemini was used to assist with the implementation of the Kalman Filter algorithms (KF, EKF, UKF), formatting the Python node structure, and establishing the ROS 2 launch and analysis topic configurations. Specifically, Gemini assisted in the implementation of asynchronous sensor fusion using partial updates (1x1 IMU updates vs 2x2 wheel updates) to prevent state-estimate issues.
+Google Gemini was used to assist with the implementation of the Kalman Filter algorithms (KF, EKF, UKF), formatting the Python node structure, and establishing the ROS 2 launch and analysis topic configurations.

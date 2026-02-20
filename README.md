@@ -178,15 +178,14 @@ All three filters demonstrated proper residual behavior. The residuals appeared 
 | EKF       |     0.3861       |       0.0382     |
 | UKF       |         0.3638   |      0.0382      |
 
-*   **Best Performing Filter:** The EKF was technically the best performing.
+*   **Best Performing Filter:** The EKF was technically the best performing. The filter appears to be slightly non-deterministic though, subsequent re-runs of the bag lead to slightly different absolute errors. 
 
 ---
 
 ### 3. Engineering Decision
-*select our best algorithm and describe why.*
 
-*   **Winning Algorithm:** ...
-*   **Reasoning:** ...
+*   **Winning Algorithm:** The Unscented Kalman Filter.
+*   **Reasoning:** The UKF performs as well as the EKF in terms of reconstructing the path, but is noticibly simpler, both in terms of the mathmatics and the code implementation. If the system were substantially more complicated, or more non-linearities were modelled such that computing the jacobian was at all difficult then the UKF would be the clear choice. 
 
 ---
 

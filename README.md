@@ -152,11 +152,10 @@ The UKF uses the same process ($f$) and measurement ($h$) models but propagates 
 *Plot each residual (including +/- 3 sigma bounds) at each time step for each algorithm.*
 
 *   **KF Residuals:** ![Kalman filter residual plotted alongside +/- 3 sigma.](kf3sigma.png)
-    *   *Analysis:* ...
 *   **EKF Residuals:** ![Extended kalman filter residual plotted alongside +/- 3 sigma.](ekf3sigma.png)
-    *   *Analysis:* ...
 *   **UKF Residuals:** ![Unscented filter residual plotted alongside +/- 3 sigma.](ukf3sigma.png)
-    *   *Analysis:* ...
+  
+All three filters demonstrated proper residual behavior. The residuals appeared white with zero mean and little autocorrelation. When the mean begins to drift away from zero it is driven back to zero indicating the Kalman gain is correctly applying to the residual.
 
 #### 2c. Algorithm Tuning
 *select one algorithm and compare badly tuned vs. well-tuned performance.*

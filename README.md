@@ -17,8 +17,7 @@ This repository contains a ROS 2 node that implements three distinct methods for
     ```
 2. **Clone the repository:**
     ```bash
-    git clone [https://github.com/Robust-Autonomous-Systems-Laboratory/proj4_group1](https://github.com/Robust-Autonomous-Systems-Laboratory/proj4_group1).
-    git submodule update --init --recursive
+    git clone https://github.com/Robust-Autonomous-Systems-Laboratory/proj4_group1
     ```
 3. **Install dependencies:**
     ```bash
@@ -27,7 +26,7 @@ This repository contains a ROS 2 node that implements three distinct methods for
     ```
 4. **Build the workspace:**
     ```bash
-    colcon build --symlink-install
+    colcon build --symlink-install --packages-select jasmitte_proj4
     ```
 5. **Source the environment:**
     ```bash
@@ -41,7 +40,7 @@ This repository contains a ROS 2 node that implements three distinct methods for
 7. **Play the rosbag:**
     * In a separate terminal (remember to source `install/setup.bash`), play the data with clock emulation:
         ```bash
-        ros2 bag play src/rosbag2_2026_02_03-15_36_14 --clock
+        ros2 bag play src/proj4_group1/rosbag2_2026_02_03-15_36_14 --clock
         ```
 8. **Analysis (rqt_plot):**
     * Each filter (KF, EKF, UKF) publishes a `Float64MultiArray` with **17 elements** to its respective `/analysis` topic.

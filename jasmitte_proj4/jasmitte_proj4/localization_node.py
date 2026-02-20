@@ -11,14 +11,17 @@ import numpy as np
 class LocalizationNode(Node):
     """
     ROS 2 Node for state estimation using KF, EKF, and UKF.
+    KF: Linearized Kalman Filter (around nominal trajectory).
+    EKF: Extended Kalman Filter (around current estimate).
+    UKF: Unscented Kalman Filter (sigma point propagation).
     """
     def __init__(self):
         super().__init__('localization_node')
         
         # ___Burgerbot Constants___
         self.R = 0.033
-        self.L = 0.170 # Slightly larger than 0.160 but seems to correct overshoot
-        self.tau = 0.8
+        self.L = 0.165 # This is slightly wider than the actual robot specs 
+        self.tau = 0.8 # Acceleration time constant. This was deemed necessary after much testing to get good results.
         
         # ___Filter States (x, y, theta, v, omega)___
         self.n = 5
@@ -29,13 +32,20 @@ class LocalizationNode(Node):
         self.x_ukf = np.zeros(self.n)
         self.P_ukf = np.eye(self.n) * 0.1 
 
+        self.kf_res_imu, self.kf_res_wheels = [0.0, 0.0], [0.0, 0.0]
+        self.ekf_res_imu, self.ekf_res_wheels = [0.0, 0.0], [0.0, 0.0]
+        self.ukf_res_imu, self.ukf_res_wheels = [0.0, 0.0], [0.0, 0.0]
+        
+        self.kf_s_imu, self.kf_s_wheels = [0.0, 0.0], [0.0, 0.0]
+        self.ekf_s_imu, self.ekf_s_wheels = [0.0, 0.0], [0.0, 0.0]
+        self.ukf_s_imu, self.ukf_s_wheels = [0.0, 0.0], [0.0, 0.0]
+
+        # Trajectory for KF Linearization
+        self.x_nom = np.zeros(self.n)
+
         # ___Noise Matrices___
         self.Q = np.diag([1e-10, 1e-10, 1e-9, 0.005, 0.005]) 
-        
-        # IMU noise: [omega, ax]
         self.R_imu = np.diag([0.001, 1.0])
-        
-        # Wheel noise: [v, omega]
         self.R_wheels = np.diag([0.05, 0.05])
         
         # ___UKF Parameters___
@@ -75,7 +85,7 @@ class LocalizationNode(Node):
         self.imu_sub = self.create_subscription(Imu, '/imu', self.imu_callback, 10)
         self.cmd_vel_sub = self.create_subscription(TwistStamped, '/cmd_vel', self.cmd_vel_callback, 10)
 
-        self.get_logger().info('Localization Node Started. Smoother Velocity-based Updates Restored.')
+        self.get_logger().info('Localization Node Started.')
 
     def normalize_angle(self, angle):
         return (angle + np.pi) % (2 * np.pi) - np.pi
@@ -118,21 +128,25 @@ class LocalizationNode(Node):
         return F
 
     def h_imu(self, x, v_cmd):
-        """ IMU Prediction: [omega, ax] """
         ax_expected = (v_cmd - x[3]) / self.tau
         return np.array([x[4], ax_expected])
 
     def h_wheels(self, x):
-        """ Wheel Prediction: [v, omega] """
         return np.array([x[3], x[4]])
 
     def predict_step(self, dt):
+        # 1. KF
+        self.x_nom = self.f(self.x_nom, dt, self.v_cmd, self.omega_cmd)
         self.x_kf = self.f(self.x_kf, dt, self.v_cmd, self.omega_cmd)
-        F_kf = self.get_jacobian_f(self.x_kf, dt)
-        self.P_kf = F_kf @ self.P_kf @ F_kf.T + self.Q
+        F_lkf = self.get_jacobian_f(self.x_nom, dt)
+        self.P_kf = F_lkf @ self.P_kf @ F_lkf.T + self.Q
+
+        # 2. EKF
         self.x_ekf = self.f(self.x_ekf, dt, self.v_cmd, self.omega_cmd)
         F_ekf = self.get_jacobian_f(self.x_ekf, dt)
         self.P_ekf = F_ekf @ self.P_ekf @ F_ekf.T + self.Q
+
+        # 3. UKF Prediction
         sigmas = self.get_sigmas(self.x_ukf, self.P_ukf)
         sigmas_f = np.array([self.f(s, dt, self.v_cmd, self.omega_cmd) for s in sigmas])
         self.x_ukf = np.dot(self.Wm, sigmas_f)
@@ -152,21 +166,23 @@ class LocalizationNode(Node):
             h_func = lambda x: self.h_wheels(x)
             H = np.zeros((2, 5)); H[0, 3] = 1.0; H[1, 4] = 1.0
 
-        # KF
+        # KF Update
         kf_y = z - h_func(self.x_kf)
         S_kf = H @ self.P_kf @ H.T + R
         K_kf = self.P_kf @ H.T @ np.linalg.inv(S_kf)
         self.x_kf += K_kf @ kf_y
         self.x_kf[2] = self.normalize_angle(self.x_kf[2])
         self.P_kf = (np.eye(self.n) - K_kf @ H) @ self.P_kf
-        # EKF
+
+        # EKF Update
         ekf_y = z - h_func(self.x_ekf)
         S_ekf = H @ self.P_ekf @ H.T + R
         K_ekf = self.P_ekf @ H.T @ np.linalg.inv(S_ekf)
         self.x_ekf += K_ekf @ ekf_y
         self.x_ekf[2] = self.normalize_angle(self.x_ekf[2])
         self.P_ekf = (np.eye(self.n) - K_ekf @ H) @ self.P_ekf
-        # UKF
+
+        # UKF Update
         sigmas = self.get_sigmas(self.x_ukf, self.P_ukf)
         sigmas_h = np.array([h_func(s) for s in sigmas])
         zp = np.dot(self.Wm, sigmas_h)
@@ -177,19 +193,42 @@ class LocalizationNode(Node):
             dx[2] = self.normalize_angle(dx[2])
             St += self.Wc[i] * np.outer(dz, dz)
             Pxz += self.Wc[i] * np.outer(dx, dz)
-        K_ukf = Pxz @ np.linalg.inv(St + R)
+        S_ukf = St + R
+        K_ukf = Pxz @ np.linalg.inv(S_ukf)
         ukf_y = z - zp
         self.x_ukf += K_ukf @ ukf_y
         self.x_ukf[2] = self.normalize_angle(self.x_ukf[2])
-        self.P_ukf = self.make_pd(self.P_ukf - K_ukf @ (St + R) @ K_ukf.T)
-        self.publish_analysis(kf_y, ekf_y, ukf_y)
+        self.P_ukf = self.make_pd(self.P_ukf - K_ukf @ S_ukf @ K_ukf.T)
+        self.publish_analysis(kf_y, ekf_y, ukf_y, S_kf, S_ekf, S_ukf, sensor_type)
 
-    def publish_analysis(self, kf_y, ekf_y, ukf_y):
-        for pub, y, P in [(self.kf_analysis_pub, kf_y, self.P_kf), 
-                          (self.ekf_analysis_pub, ekf_y, self.P_ekf), 
-                          (self.ukf_analysis_pub, ukf_y, self.P_ukf)]:
+    def publish_analysis(self, kf_y, ekf_y, ukf_y, S_kf, S_ekf, S_ukf, sensor_type):
+        s_kf_diag = 3.0 * np.sqrt(np.diag(S_kf))
+        s_ekf_diag = 3.0 * np.sqrt(np.diag(S_ekf))
+        s_ukf_diag = 3.0 * np.sqrt(np.diag(S_ukf))
+        
+        if sensor_type == 'imu':
+            self.kf_res_imu, self.kf_s_imu = kf_y, s_kf_diag
+            self.ekf_res_imu, self.ekf_s_imu = ekf_y, s_ekf_diag
+            self.ukf_res_imu, self.ukf_s_imu = ukf_y, s_ukf_diag
+        else:
+            self.kf_res_wheels, self.kf_s_wheels = kf_y, s_kf_diag
+            self.ekf_res_wheels, self.ekf_s_wheels = ekf_y, s_ekf_diag
+            self.ukf_res_wheels, self.ukf_s_wheels = ukf_y, s_ukf_diag
+
+        data_list = [
+            (self.kf_analysis_pub, self.kf_res_imu, self.kf_res_wheels, self.kf_s_imu, self.kf_s_wheels, self.P_kf),
+            (self.ekf_analysis_pub, self.ekf_res_imu, self.ekf_res_wheels, self.ekf_s_imu, self.ekf_s_wheels, self.P_ekf),
+            (self.ukf_analysis_pub, self.ukf_res_imu, self.ukf_res_wheels, self.ukf_s_imu, self.ukf_s_wheels, self.P_ukf)
+        ]
+
+        for pub, res_imu, res_wheels, s_imu, s_wheels, P in data_list:
             msg = Float64MultiArray()
-            msg.data = [float(y[0]), float(y[1]), float(P[0,0]), float(P[1,1]), float(P[2,2]), float(P[3,3])]
+            msg.data = [
+                float(res_imu[0]), float(res_imu[1]), float(res_wheels[0]), float(res_wheels[1]),
+                float(s_imu[0]), float(s_imu[1]), float(s_wheels[0]), float(s_wheels[1]),
+                -float(s_imu[0]), -float(s_imu[1]), -float(s_wheels[0]), -float(s_wheels[1]),
+                float(P[0,0]), float(P[1,1]), float(P[2,2]), float(P[3,3]), float(P[4,4])
+            ]
             pub.publish(msg)
 
     def joint_state_callback(self, msg):

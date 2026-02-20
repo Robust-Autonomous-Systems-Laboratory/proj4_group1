@@ -88,7 +88,6 @@ The system uses a 5-state Velocity-State model to allow direct fusion of acceler
 *   **Process Model ($f(x, u)$):**
     Predicts the next state based on current state and control inputs ($v_{cmd}, \omega_{cmd}$).
     $$
-    ```bash
     x_{k+1} = \begin{bmatrix}
     x_k + v_k \cos(\theta_k) \Delta t \\
     y_k + v_k \sin(\theta_k) \Delta t \\

@@ -17,7 +17,7 @@ This repository contains a ROS 2 node that implements three distinct methods for
     ```
 2. **Clone the repository:**
     ```bash
-    git clone [https://github.com/Robust-Autonomous-Systems-Laboratory/proj4_group1](https://github.com/Robust-Autonomous-Systems-Laboratory/proj4_group1).
+    git clone https://github.com/Robust-Autonomous-Systems-Laboratory/proj4_group1
     git submodule update --init --recursive
     ```
 3. **Install dependencies:**

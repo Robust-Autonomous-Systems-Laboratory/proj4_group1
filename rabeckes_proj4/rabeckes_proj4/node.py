@@ -9,8 +9,9 @@ from std_msgs.msg import Header
 from tf2_ros.buffer import Buffer
 from tf2_ros.transform_listener import TransformListener
 from tf2_ros import TransformException
+from tf2_geometry_msgs import do_transform_pose
 
-from rabeckes_proj4.kf import KalmanFilter
+from rabeckes_proj4.filters import KalmanFilter, ExtendedKalmanFilter, UnscentedKalmanFilter
 
 class KFNode(Node):
     def __init__(self):
@@ -18,6 +19,7 @@ class KFNode(Node):
         self.dt = 0.05
         self.poses = []
         # Init Filters
+        # KF
         F = np.array([
             [1, 0, 0, self.dt, 0, 0],
             [0, 1, 0, 0, self.dt, 0],
@@ -31,15 +33,43 @@ class KFNode(Node):
             [0, 0, 1, 0, 0, 0]])
         Q = np.eye(6) * 0.0001
         R = np.eye(3) * 0.001
+        # EKF
+        f = lambda x: np.array([
+            x[0] + x[3]*self.dt,
+            x[1] + x[4]*self.dt,
+            x[2] + x[5]*self.dt,
+            x[3],
+            x[4],
+            x[5]])
+        F_jacobian = lambda x: np.array([
+            [1, 0, 0, self.dt, 0, 0],
+            [0, 1, 0, 0, self.dt, 0],
+            [0, 0, 1, 0, 0, self.dt],
+            [0, 0, 0, 1, 0, 0],
+            [0, 0, 0, 0, 1, 0],
+            [0, 0, 0, 0, 0, 1]])
+        H_jacobian = lambda x: np.array([
+            [np.cos(x[2]), np.sin(x[2]), 0, 0, 0, 0],
+            [0, 0, 1, 0, 0, 0]])
+        R_ekf = np.eye(2) * 0.5
         self.filters = {
-                'kf' : KalmanFilter(F, H, Q, R, 6),
-                'ekf' : None, 
+                'kf' : None, #KalmanFilter(F, H, Q, R, 6),
+                'ekf' : ExtendedKalmanFilter(f, F_jacobian, H_jacobian, Q, R_ekf, 6),
                 'ukf' : None
                 }
+        self.wheel = {
+            'phi_l' : 0.,
+            'phi_r' : 0.,
+            'radius' : 0.033,
+            'base' : 0.16,
+            }
         self.z = {
             'x' : 0.,
             'y' : 0.,
-            'theta' : 0.}
+            'ds' : 0.,
+            'theta' : 0.,
+            'd_theta' : 0.
+            }
         # Create Subscribers
         self.joint_state_sub = self.create_subscription(
             JointState,
@@ -76,34 +106,32 @@ class KFNode(Node):
         self.tf_listener = TransformListener(self.tf_buffer, self)
         
     def jointStateSub(self, msg):
-        try:
-            tf = self.tf_buffer.lookup_transform('odom', 'base_link', rclpy.time.Time())
-        except TransformException as e:
-            self.get_logger().warn(f'Could not transform odom to base_link: {e}')
-            return
-        '''
-        qx = tf.transform.rotation.x
-        qy = tf.transform.rotation.y
-        qz = tf.transform.rotation.z
-        qw = tf.transform.rotation.w
-        theta = self.quaternionToYaw(qx, qy, qz, qw)
-        mx = msg.position[0]
-        my = msg.position[1]
-        self.z['x'] = np.cos(theta)*mx - np.sin(theta)*my + tf.transform.translation.x
-        self.z['y'] = np.sin(theta)*mx + np.cos(theta)*my + tf.transform.translation.y
-        '''
-        self.z['x'] = tf.transform.translation.x
-        self.z['y'] = tf.transform.translation.y
-        #self.get_logger().info(f'{tf}')
+        # Wheel Angle
+        d_phi_l = msg.position[0] - self.wheel['phi_l']
+        d_phi_r = msg.position[1] - self.wheel['phi_r']
+        self.wheel['phi_l'] = msg.position[0]
+        self.wheel['phi_r'] = msg.position[1]
+        # Wheel Travel
+        ds_l = d_phi_l * self.wheel['radius']
+        ds_r = d_phi_r * self.wheel['radius']
+        self.z['ds'] = (ds_l + ds_r) / 2
+        self.z['d_theta'] = self.wheel['radius'] * (ds_r - ds_l) / self.wheel['base']
+        # Update state
         return
 
     def imuSub(self, msg):
-        x = msg.orientation.x
-        y = msg.orientation.y
-        z = msg.orientation.z
-        w = msg.orientation.w
-        yaw = self.quaternionToYaw(x, y, z, w)
-        self.z['theta'] = yaw
+        try:
+            tf = self.tf_buffer.lookup_transform('odom', 'imu_link', rclpy.time.Time())
+        except TransformException as e:
+            self.get_logger().warn(f'Could not transform odom to imu_link: {e}')
+            return
+        theta = msg.angular_velocity.z * self.dt
+        pose = Pose()
+        pose.orientation.w = -np.cos(theta/2)
+        pose.orientation.z = np.sin(theta/2)
+        new_pose = do_transform_pose(pose, tf)
+        t_theta = self.quaternionToYaw(new_pose.orientation.x, new_pose.orientation.y, new_pose.orientation.z, new_pose.orientation.w)
+        self.z['theta'] = self.z['theta'] + t_theta
         #self.get_logger().info(f'IMU: theta = {self.z['theta']}')
         return
 
@@ -125,9 +153,9 @@ class KFNode(Node):
             path_msg.header = header
             odom_msg.header = header
             # Data
-            if self.filters[f] == None:
-                break
-            z = np.array([self.z['x'], self.z['y'], self.z['theta']])
+            if self.filters[f] == None or self.filters[f] == 'kf':
+                continue
+            z = np.array([self.z['ds'], self.z['d_theta']])
             x, P = self.filters[f].step(z, P=p0)
             self.get_logger().info(f'New state vector {x}')
             pose = Pose()

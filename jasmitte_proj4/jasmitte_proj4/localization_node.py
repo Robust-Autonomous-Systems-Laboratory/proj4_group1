@@ -297,8 +297,26 @@ class LocalizationNode(Node):
 def main():
     rclpy.init()
     node = LocalizationNode()
-    try: rclpy.spin(node)
-    except KeyboardInterrupt: pass
-    finally: node.destroy_node(); rclpy.shutdown()
+    try: 
+        rclpy.spin(node)
+    except KeyboardInterrupt: 
+        pass
+    finally:
+        print("\n" + "="*50)
+        print("2e. Ground Truth Evaluation Results")
+        print("Note: Assumes 'Initial Position - Final Position'")
+        print("-" * 50)
+        print(f"{'Algorithm':<10} | {'Trans. Error (m)':<18} | {'Rot. Error (rad)':<18}")
+        print("-" * 50)
+        
+        for name, state in [("KF", node.x_kf), ("EKF", node.x_ekf), ("UKF", node.x_ukf)]:
+            trans_err = np.sqrt(state[0]**2 + state[1]**2)
+            rot_err = abs(node.normalize_angle(state[2]))
+            print(f"{name:<10} | {trans_err:<18.4f} | {rot_err:<18.4f}")
+            
+        print("="*50 + "\n")
+        
+        node.destroy_node()
+        rclpy.shutdown()
 
 if __name__ == '__main__': main()

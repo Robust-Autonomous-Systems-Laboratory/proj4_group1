@@ -78,29 +78,24 @@ This repository contains a ROS 2 node that implements three distinct methods for
 ### 1. State Space and Algorithm Modeling
 The system uses a 5-state Velocity-State model to allow direct fusion of accelerometers and gyroscopes.
 
+*   **State Vector ($x$):**
+    $$
+    x = \begin{bmatrix}
+    x \\
+    y \\
+    \theta \\
+    v \\
+    \omega
+    \end{bmatrix}
+    $$
+    *   $x, y$: Robot position in global frame (meters)
+    *   $\theta$: Robot heading (radians)
+    *   $v$: Linear velocity (m/s)
+    *   $\omega$: Angular velocity (rad/s)
 
-
-**State Vector ($x$):**
-
-$$
-x = \begin{bmatrix}
-x \\
-y \\
-\theta \\
-v \\
-\omega
-\end{bmatrix}
-$$
-
-*   $x, y$: Robot position in global frame (meters)
-*   $\theta$: Robot heading (radians)
-*   $v$: Linear velocity (m/s)
-*   $\omega$: Angular velocity (rad/s)
-
-  **Process Model ($f$):**
-Predicts the next state based on current state and control inputs ($v_{cmd}, \omega_{cmd}$).
-
-$$
+*   **Process Model ($f$):**
+    Predicts the next state based on current state and control inputs ($v_{cmd}, \omega_{cmd}$).
+    $$
     x_{k+1} = \begin{bmatrix}
         x_k + v_k \cos(\theta_k) \Delta t \\
         y_k + v_k \sin(\theta_k) \Delta t \\
@@ -108,14 +103,13 @@ $$
         v_k + (v_{cmd} - v_k) \frac{\Delta t}{\tau} \\
         \omega_k + (\omega_{cmd} - \omega_k) \frac{\Delta t}{\tau}
     \end{bmatrix}
-$$
+    $$
 
 #### Kalman Filter (KF/EKF) Matrices
 
-  **Process Jacobian ($F$):**
-Linearized around the current state estimate for both KF and EKF.
-    
-$$
+*   **Process Jacobian ($F$):**
+    Linearized around the current state estimate for both KF and EKF.
+    $$
     F = \frac{\partial f}{\partial x} = \begin{bmatrix}
     1 & 0 & -v_k \sin(\theta_k) \Delta t & \cos(\theta_k) \Delta t & 0 \\
     0 & 1 & v_k \cos(\theta_k) \Delta t & \sin(\theta_k) \Delta t & 0 \\
@@ -123,46 +117,40 @@ $$
     0 & 0 & 0 & 1 - \Delta t/\tau & 0 \\
     0 & 0 & 0 & 0 & 1 - \Delta t/\tau
     \end{bmatrix}
-$$
+    $$
 
-**Measurement Model:**
-The system fuses both Wheel Encoders and IMU in the **Rate Domain**.
+*   **Measurement Model:**
+    The system fuses both Wheel Encoders and IMU in the **Rate Domain**.
 
-**1. IMU Measurement:**\
-   **- Measurement Vector ($z_{imu}$):** $[\omega, a_x]^T$\
-   **- Observation Model ($h_{imu}$):** 
-    
-$$ 
-h_{imu}(x) = \begin{bmatrix} \omega \\ (v_{cmd} - v) / \tau \end{bmatrix} 
-$$
+    1.  **IMU Measurement:**
+        *   **Measurement Vector ($z_{imu}$):** $[\omega, a_x]^T$
+        *   **Observation Model ($h_{imu}$):**
+            $$
+            h_{imu}(x) = \begin{bmatrix} \omega \\ (v_{cmd} - v) / \tau \end{bmatrix}
+            $$
+        *   **Jacobian ($H_{imu}$):**
+            $$
+            H_{imu} = \begin{bmatrix} 0 & 0 & 0 & 0 & 1 \\
+            0 & 0 & 0 & -1/\tau & 0
+            \end{bmatrix}
+            $$
 
-**- Jacobian ($H_{imu}$):**
-
-$$ 
-H_{imu} = \begin{bmatrix} 0 & 0 & 0 & 0 & 1 \\ 
-0 & 0 & 0 & -1/\tau & 0 
-\end{bmatrix} 
-$$
-
-**2. Wheel Encoder Measurement:**\
-**- Measurement Vector ($z_{wheels}$):** $[v, \omega]^T$\
-**- Observation Model ($h_{wheels}$):**
-      
-$$ 
-h_{wheels}(x) = \begin{bmatrix} 
-v \\ 
-\omega 
-\end{bmatrix} 
-$$
-
-**- Jacobian ($H_{wheels}$):**
-
-$$ 
-H_{wheels} = \begin{bmatrix}
-0 & 0 & 0 & 1 & 0 \\ 
-0 & 0 & 0 & 0 & 1 
-\end{bmatrix} 
-$$
+    2.  **Wheel Encoder Measurement:**
+        *   **Measurement Vector ($z_{wheels}$):** $[v, \omega]^T$
+        *   **Observation Model ($h_{wheels}$):**
+            $$
+            h_{wheels}(x) = \begin{bmatrix}
+            v \\
+            \omega
+            \end{bmatrix}
+            $$
+        *   **Jacobian ($H_{wheels}$):**
+            $$
+            H_{wheels} = \begin{bmatrix}
+            0 & 0 & 0 & 1 & 0 \\
+            0 & 0 & 0 & 0 & 1
+            \end{bmatrix}
+            $$
 
 #### Unscented Kalman Filter (UKF)
 The UKF uses the same process ($f$) and measurement ($h$) models but propagates sigma points using the transform.

@@ -171,15 +171,14 @@ All three filters demonstrated proper residual behavior. The residuals appeared 
 *   **Improvement Strategy:** ...
 
 #### 2e. Ground Truth Evaluation
-*compute the aboslute error from the ending and starting positions. this is just the initial position minus the final position*
 
 | Algorithm | Trans. Error (m) | Rot. Error (rad) |
 |-----------|------------------|------------------|
-| KF        |                  |                  |
-| EKF       |                  |                  |
-| UKF       |                  |                  |
+| KF        |   0.3769         |        0.0382    |
+| EKF       |     0.3861       |       0.0382     |
+| UKF       |         0.3638   |      0.0382      |
 
-*   **Best Performing Filter:** ...
+*   **Best Performing Filter:** The EKF was technically the best performing.
 
 ---
 

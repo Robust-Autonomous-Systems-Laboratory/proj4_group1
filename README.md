@@ -145,7 +145,7 @@ The UKF uses the same process ($f$) and measurement ($h$) models but propagates 
 *   **Demonstration Video Including Covariance:** <video controls src="screen_rec_cropped.mp4" title="Title"></video>
 
 ![Rviz Depiction of Three Paths](<results.png>)
-*Current visualization of the three paths *Plot each residual (including +/- 3 sigma bounds) at each time step for each algorithm.*(Red: KF, Green: EKF, Blue: UKF)*
+*Current visualization of the three paths (Red: KF, Green: EKF, Blue: UKF)*
 
 #### 2b. Understanding of the Residual
 
@@ -163,11 +163,10 @@ All three filters demonstrated proper residual behavior. The residuals appeared 
 *   **Tuning Explanation:** By tuning the R matrices so that the linear and angular acceleration measured by the IMU is less trustworthy the filter learns to trust the process and wheel encoder measurements more. The residual appears to have less variance, and be more zero-centered on the well tuned filter. 
 
 #### 2d. Covariance Stability
-*Plot diagonal elements of the state covariance matrix without using measurement.*
 
-*   **KF Covariance (No Measurements):** [add our plots]
-*   **EKF Covariance (No Measurements):** [add our plots]
-*   **UKF Covariance (No Measurements):** [add our plots]
+*   **KF Covariance (No Measurements):** ![alt text](kfnomeas.png)
+*   **EKF Covariance (No Measurements):** ![alt text](ekfnomeas.png)
+*   **UKF Covariance (No Measurements):** ![alt text](ukfnomeas.png)
 *   **Stability Analysis:** ...
 *   **Improvement Strategy:** ...
 

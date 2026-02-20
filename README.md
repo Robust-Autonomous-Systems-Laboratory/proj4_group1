@@ -197,9 +197,9 @@ The UKF uses the same process ($f$) and measurement ($h$) models but propagates 
 ---
 
 ### 4. Future Improvements
-*Describe improvements to our system*
+The most important improvement to this localization system is to include a map. If the robot has an understanding of what its environmet is it can relate itself to that environment based on sesnor information it has. Combining the map with more sensor data can also improve the localization. Here, the robot is directly measuring its environment and relating features it detects to the map its has. This gets into the realm of simultaneous localization and mapping.
 
-*   **Enhancements:** ...
+A more direct improvement to this system would be better characterization of covariance for both the process noise (Q) and the measurement noise (R). These parameters where tuned based off of intuition but a proper calculation would improve the filter's path. The process noise covariance (Q) could be better characterized by incoporating the varaiance of the acceleration which would act like noise on our position and velocity measurements. To improve the the measurement noise covariance characterization (R), tests would need to be done with those sensors to find their characteristics.
 
 ---
 

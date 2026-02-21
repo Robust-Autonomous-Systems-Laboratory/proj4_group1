@@ -17,45 +17,58 @@ class KFNode(Node):
     def __init__(self):
         super().__init__('kf_node')
         self.dt = 0.05
-        self.poses = []
+        self.poses = {
+            'kf' : [],
+            'ekf' : [],
+            'ukf' : []
+            }
         # Init Filters
         # KF
         F = np.array([
             [1, 0, 0, self.dt, 0, 0],
-            [0, 1, 0, 0, self.dt, 0],
-            [0, 0, 1, 0, 0, self.dt],
-            [0, 0, 0, 1, 0, 0],
+            [0, 1, 0, 0, 0, 0],
+            [0, 0, 1, 0, self.dt, 0],
+            [0, 0, 0, 1, 0, self.dt],
             [0, 0, 0, 0, 1, 0],
             [0, 0, 0, 0, 0, 1]])
         H = np.array([
-            [1, 0, 0, 0, 0, 0],
-            [0, 1, 0, 0, 0, 0],
-            [0, 0, 1, 0, 0, 0]])
-        Q = np.eye(6) * 0.0001
-        R = np.eye(3) * 0.001
-        # EKF
-        f = lambda x: np.array([
-            x[0] + x[3]*self.dt,
-            x[1] + x[4]*self.dt,
-            x[2] + x[5]*self.dt,
-            x[3],
-            x[4],
-            x[5]])
-        F_jacobian = lambda x: np.array([
-            [1, 0, 0, self.dt, 0, 0],
-            [0, 1, 0, 0, self.dt, 0],
-            [0, 0, 1, 0, 0, self.dt],
             [0, 0, 0, 1, 0, 0],
             [0, 0, 0, 0, 1, 0],
             [0, 0, 0, 0, 0, 1]])
+        Q = np.eye(6) * 0.01
+        R = np.eye(3) * 0.001
+        # EKF
+        f = lambda x, u: np.array([
+            x[0] + x[3]*self.dt*np.cos(x[2]),
+            x[1] + x[3]*self.dt*np.sin(x[2]),
+            x[2] + x[4]*self.dt,
+            x[3] + x[5]*self.dt,
+            u[1],
+            (x[3] + u[0])/self.dt
+            ])
+        F_jacobian = lambda x: np.array([
+            [1, 0, -x[3]*np.sin(x[2])*self.dt, np.cos(x[2])*self.dt, 0, 0],
+            [0, 1, x[3]*np.cos(x[2])*self.dt, np.sin(x[2])*self.dt,  0, 0],
+            [0, 0, 1, 0, self.dt, 0],
+            [0, 0, 0, 1, 0, self.dt],
+            [0, 0, 0, 0, 1, 0],
+            [0, 0, 0, 1/self.dt, 0, 1]])
         H_jacobian = lambda x: np.array([
-            [np.cos(x[2]), np.sin(x[2]), 0, 0, 0, 0],
-            [0, 0, 1, 0, 0, 0]])
-        R_ekf = np.eye(2) * 0.5
+            [0, 0, 0, 1, 0, 0],
+            [0, 0, 0, 0, 1, 0],
+            [0, 0, 0, 0, 0, 1]])
+        R_ekf = np.eye(3) * 0.001
+        f_ukf = lambda x: np.array([
+            x[0] + x[3]*self.dt*np.cos(x[2]),
+            x[1] + x[3]*self.dt*np.sin(x[2]),
+            x[2] + x[4]*self.dt,
+            x[3] + x[5]*self.dt,
+            x[4],
+            x[5]])
         self.filters = {
-                'kf' : None, #KalmanFilter(F, H, Q, R, 6),
+                'kf' :  KalmanFilter(F, H, Q, R, 6),
                 'ekf' : ExtendedKalmanFilter(f, F_jacobian, H_jacobian, Q, R_ekf, 6),
-                'ukf' : None
+                'ukf' : None #UnscentedKalmanFilter(6, 3, f_ukf, lambda x: np.array([x[3], x[4], x[5]]), Q, R_ekf)
                 }
         self.wheel = {
             'phi_l' : 0.,
@@ -64,11 +77,13 @@ class KFNode(Node):
             'base' : 0.16,
             }
         self.z = {
-            'x' : 0.,
-            'y' : 0.,
-            'ds' : 0.,
-            'theta' : 0.,
-            'd_theta' : 0.
+            'v' : 0.,
+            'omega' : 0.,
+            'acc' : 0.
+            }
+        self.u = {
+            'v' : 0.,
+            'omega' : 0.
             }
         # Create Subscribers
         self.joint_state_sub = self.create_subscription(
@@ -112,30 +127,21 @@ class KFNode(Node):
         self.wheel['phi_l'] = msg.position[0]
         self.wheel['phi_r'] = msg.position[1]
         # Wheel Travel
-        ds_l = d_phi_l * self.wheel['radius']
-        ds_r = d_phi_r * self.wheel['radius']
-        self.z['ds'] = (ds_l + ds_r) / 2
-        self.z['d_theta'] = self.wheel['radius'] * (ds_r - ds_l) / self.wheel['base']
+        ds_l = (d_phi_l * self.wheel['radius'])/self.dt
+        ds_r = (d_phi_r * self.wheel['radius'])/self.dt
+        self.z['v'] = (ds_l + ds_r) / 2
         # Update state
         return
 
     def imuSub(self, msg):
-        try:
-            tf = self.tf_buffer.lookup_transform('odom', 'imu_link', rclpy.time.Time())
-        except TransformException as e:
-            self.get_logger().warn(f'Could not transform odom to imu_link: {e}')
-            return
-        theta = msg.angular_velocity.z * self.dt
-        pose = Pose()
-        pose.orientation.w = -np.cos(theta/2)
-        pose.orientation.z = np.sin(theta/2)
-        new_pose = do_transform_pose(pose, tf)
-        t_theta = self.quaternionToYaw(new_pose.orientation.x, new_pose.orientation.y, new_pose.orientation.z, new_pose.orientation.w)
-        self.z['theta'] = self.z['theta'] + t_theta
+        self.z['acc'] = msg.linear_acceleration.x
+        self.z['omega'] = msg.angular_velocity.z
         #self.get_logger().info(f'IMU: theta = {self.z['theta']}')
         return
 
     def cmdVelSub(self, msg):
+        self.u['v'] = msg.twist.linear.x
+        self.u['omega'] = msg.twist.angular.z
         return
 
     def quaternionToYaw(self, x, y, z, w):
@@ -146,6 +152,8 @@ class KFNode(Node):
         header = Header()
         header.stamp = self.get_clock().now().to_msg()
         header.frame_id = 'odom'
+        z = np.array([self.z['v'], self.z['omega'], self.z['acc']])
+        u = np.array([self.u['v'], self.u['omega']])
         for f in self.filters:
             path_msg = Path()
             odom_msg = Odometry()
@@ -153,11 +161,10 @@ class KFNode(Node):
             path_msg.header = header
             odom_msg.header = header
             # Data
-            if self.filters[f] == None or self.filters[f] == 'kf':
+            if self.filters[f] == None:
                 continue
-            z = np.array([self.z['ds'], self.z['d_theta']])
-            x, P = self.filters[f].step(z, P=p0)
-            self.get_logger().info(f'New state vector {x}')
+            x, P = self.filters[f].step(z, u=u, P=p0)
+            self.get_logger().info(f'{f} New state vector {x}')
             pose = Pose()
             pose.position.x, pose.position.y = x[0], x[1]
             pose.orientation.w = -np.cos(x[2]/2)
@@ -166,8 +173,8 @@ class KFNode(Node):
             pose_s = PoseStamped()
             pose_s.pose = pose
             pose_s.header = header
-            self.poses.append(pose_s)
-            path_msg.poses = self.poses
+            self.poses[f].append(pose_s)
+            path_msg.poses = self.poses[f]
             c = np.zeros([6,6])
             c[0:3, 0:3] = P[0:3, 0:3]
             odom_msg.pose.covariance = c.flatten()

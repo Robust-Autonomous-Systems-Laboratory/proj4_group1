@@ -7,7 +7,7 @@ class Filter(ABC):
         pass
 
     @abstractmethod
-    def update(self, z):
+    def update(self, z, u=None):
         pass
 
     @abstractmethod
@@ -26,7 +26,7 @@ class KalmanFilter(Filter):
         self.start = True
         return
 
-    def predict(self):
+    def predict(self, u=None):
         self.x = self.F@self.x
         self.P = self.F@self.P@self.F.T + self.Q
         return
@@ -39,13 +39,13 @@ class KalmanFilter(Filter):
         self.P = (np.identity(self.m) - K@self.H)@self.P
         return self.x, self.P
 
-    def step(self, z, P=None):
+    def step(self, z, u=None, P=None):
         if self.start:
             self.x = np.concatenate([z, np.zeros(3)])
             self.P = P
             self.start = False
             return self.x, self.P
-        self.predict()
+        self.predict(u)
         return self.update(z)
 
 class ExtendedKalmanFilter(Filter):
@@ -61,8 +61,11 @@ class ExtendedKalmanFilter(Filter):
         self.start = True
         return
 
-    def predict(self):
-        self.x = self.f(self.x)
+    def predict(self, u=None):
+        if u is not None:
+            self.x = self.f(self.x, u)
+        else:
+            self.x = self.f(self.x)
         F = self.F_jacobian(self.x)
         self.P = F@self.P@F.T + self.Q
         return
@@ -76,13 +79,13 @@ class ExtendedKalmanFilter(Filter):
         self.P = (np.identity(self.m) - K@H)@self.P
         return self.x, self.P
 
-    def step(self, z, P=None):
+    def step(self, z, u=None, P=None):
         if self.start:
             self.x = np.array([0, 0, z[1], 0, 0, 0])
             self.P = P
             self.start = False
             return self.x, self.P
-        self.predict()
+        self.predict(u)
         return self.update(z)
 
 class UnscentedKalmanFilter(Filter): 
@@ -120,13 +123,13 @@ class UnscentedKalmanFilter(Filter):
             sigma_points[n + i + 1] = x - sqrt_P[:, i]
         return sigma_points
 
-    def predict(self):
+    def predict(self, u=None):
         sigma_points = self.sigma_points(self.x, self.P)
         sigma_points_pred = np.array([self.f(sp) for sp in sigma_points])
-        x_pred = np.mean(sigma_points_pred, axis=0)
+        x_pred = np.sum(self.wm@sigma_points_pred)
         P_pred = self.Q.copy()
-        for sp in sigma_points_pred:
-            P_pred += np.outer(sp - x_pred, sp - x_pred)
+        for j in range(2 * self.dim_x + 1):
+            P_pred +=self.wc[j]*np.outer(sigma_points[j] - x_pred, sigma_points[j] - x_pred)
         self.x = x_pred
         self.P = P_pred
 
@@ -136,20 +139,20 @@ class UnscentedKalmanFilter(Filter):
         z_pred = np.mean(sigma_points_meas, axis=0)
         P_zz = self.R.copy()
         P_xz = np.zeros((self.dim_x, self.dim_z))
-        for sp, sp_meas in zip(sigma_points, sigma_points_meas):
-            P_zz += np.outer(sp_meas - z_pred, sp_meas - z_pred)
-            P_xz += np.outer(sp - self.x, sp_meas - z_pred)
+        for sp, sp_meas, w in zip(sigma_points, sigma_points_meas, self.wc):
+            P_zz += w*np.outer(sp_meas - z_pred, sp_meas - z_pred)
+            P_xz += w*np.outer(sp - self.x, sp_meas - z_pred)
         K = P_xz @ np.linalg.inv(P_zz)
         self.x += K @ (z - z_pred)
         self.P -= K @ P_zz @ K.T
         return self.x, self.P
 
-    def step(self, z, P=None):
+    def step(self, z, u=None, P=None):
         if self.start:
             self.x = np.zeros(self.dim_x)
             self.P = P
             self.start = False
             return self.x, self.P
-        self.predict()
+        self.predict(u)
         return self.update(z)
 
